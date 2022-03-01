@@ -1,7 +1,10 @@
-pub mod lang_lexer;
+mod lang_lexer;
+
+pub use lang_lexer::{ LangTokenType, LangToken, LangLexer };
 
 use std::iter::Peekable;
 use std::str::Chars;
+use crate::util::EscapeError;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TokenPos {
@@ -9,6 +12,7 @@ pub struct TokenPos {
     pub column: i32,
 }
 
+#[derive(Debug)]
 pub enum LexerError {
     UnexpectedEof,
 
@@ -17,6 +21,20 @@ pub enum LexerError {
         pos: TokenPos,
         expected: char,
         got: char
+    },
+
+    OtherError(TokenPos, String)
+}
+
+impl LexerError {
+    pub fn from_escape_error(e: EscapeError, pos: TokenPos) -> Self {
+        match e {
+            EscapeError::UnexpectedEof => LexerError::UnexpectedEof,
+            EscapeError::UnexpectedCharacter(pos_i, c) => LexerError::UnexpectedCharacter(
+                TokenPos::new(pos.line, pos.column + pos_i), c),
+            EscapeError::FailedConversion(err) => LexerError::OtherError(pos, format!("Failed conversion to u32: {}", err.to_string())),
+            EscapeError::InvalidCharacter(err) => LexerError::OtherError(pos, format!("Invalid character: {}", err.to_string())),
+        }
     }
 }
 
@@ -34,15 +52,16 @@ struct Lexer<'a> {
     source: &'a str,
     source_chars: Peekable<Chars<'a>>,
     start: usize, current: usize,
-    pos: TokenPos,
+    pos: TokenPos, current_pos: TokenPos,
 }
 
+#[allow(unused)]
 impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Lexer<'a> {
         Lexer {
             source, source_chars: source.chars().peekable(),
             start: 0, current: 0,
-            pos: TokenPos::begin()
+            pos: TokenPos::begin(), current_pos: TokenPos::begin()
         }
     }
 
@@ -55,12 +74,13 @@ impl<'a> Lexer<'a> {
     pub fn consume(&mut self) -> Result<char, LexerError> {
         self.source_chars.next().ok_or(LexerError::UnexpectedEof).map(|c| {
             if c == '\n' {
-                self.pos.line += 1;
-                self.pos.column = 0;
+                self.current_pos.line += 1;
+                self.current_pos.column = 0;
             } else {
-                self.pos.column += 1;
+                self.current_pos.column += 1;
             }
 
+            self.current += 1;
             c
         })
     }
@@ -156,5 +176,6 @@ impl<'a> Lexer<'a> {
 
     pub fn set_start_pos_to_current(&mut self) {
         self.start = self.current;
+        self.pos = self.current_pos;
     }
 }
