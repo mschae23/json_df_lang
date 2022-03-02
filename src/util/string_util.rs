@@ -24,39 +24,60 @@ pub enum EscapeError {
     InvalidCharacter(DecodeUtf16Error),
 }
 
-pub fn unescape_character(input: &str) -> Result<char, EscapeError> {
+pub fn unescape_str(input: &str) -> Result<String, EscapeError> {
+    if input.is_empty() {
+        return Ok(String::from(""));
+    }
+
+    let mut output = String::new();
     let mut chars = input.chars();
-    let c = chars.next().ok_or(EscapeError::UnexpectedEof)?;
 
-    match c {
-        '"' => Ok('"'),
-        '\\' => Ok('\\'),
-        '/' => Ok('/'),
-        // 'b' => Ok('\b'),
-        // 'f' => Ok('\f'),
-        'n' => Ok('\n'),
-        'r' => Ok('\r'),
-        't' => Ok('\t'),
-        'u' => {
-            let mut string = String::new();
+    loop {
+        let c = match chars.next() {
+            Some(c) => c,
+            None => return Ok(output),
+        };
 
-            for i in 0..4 {
-                let c = chars.next().ok_or(EscapeError::UnexpectedEof)?;
-
-                if c.is_digit(16) {
-                    string.push(c);
-                } else {
-                    return Err(EscapeError::UnexpectedCharacter(1 + i, c));
-                }
-            }
-
-            char::decode_utf16([u16::from_str_radix(&string, 16)
-                .map_err(|err| EscapeError::FailedConversion(err))?]).next()
-                .ok_or_else(|| EscapeError::UnexpectedEof)?
-                .map_err(|err| EscapeError::InvalidCharacter(err))
+        if c != '\\' {
+            output.push(c);
+            continue;
         }
 
-        _ => Err(EscapeError::UnexpectedCharacter(0, c))
+        let c = match chars.next() {
+            Some(c) => c,
+            None => return Err(EscapeError::UnexpectedEof),
+        };
+
+        match c {
+            '"' => output.push('"'),
+            '\\' => output.push('\\'),
+            '/' => output.push('/'),
+            // 'b' => output.push('\b'),
+            // 'f' => output.push('\f'),
+            'n' => output.push('\n'),
+            'r' => output.push('\r'),
+            't' => output.push('\t'),
+            'u' => {
+                let mut string = String::new();
+
+                for i in 0..4 {
+                    let c = chars.next().ok_or(EscapeError::UnexpectedEof)?;
+
+                    if c.is_digit(16) {
+                        string.push(c);
+                    } else {
+                        return Err(EscapeError::UnexpectedCharacter(1 + i, c));
+                    }
+                }
+
+                output.push(char::decode_utf16([u16::from_str_radix(&string, 16)
+                    .map_err(|err| EscapeError::FailedConversion(err))?]).next()
+                    .ok_or_else(|| EscapeError::UnexpectedEof)?
+                    .map_err(|err| EscapeError::InvalidCharacter(err))?);
+            }
+
+            _ => return Err(EscapeError::UnexpectedCharacter(0, c)), // TODO error pos
+        }
     }
 }
 

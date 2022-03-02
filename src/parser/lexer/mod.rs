@@ -1,5 +1,4 @@
 mod lang_lexer;
-
 pub use lang_lexer::{ LangTokenType, LangToken, LangLexer };
 
 use std::iter::Peekable;
@@ -12,7 +11,7 @@ pub struct TokenPos {
     pub column: i32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LexerError {
     UnexpectedEof,
 
@@ -55,6 +54,8 @@ struct Lexer<'a> {
     pos: TokenPos, current_pos: TokenPos,
 }
 
+type LexerResult<T> = Result<T, LexerError>;
+
 #[allow(unused)]
 impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Lexer<'a> {
@@ -67,11 +68,11 @@ impl<'a> Lexer<'a> {
 
     pub fn pos(&self) -> TokenPos { self.pos }
 
-    pub fn peek(&mut self) -> Result<&char, LexerError> {
+    pub fn peek(&mut self) -> LexerResult<&char> {
         self.source_chars.peek().ok_or(LexerError::UnexpectedEof)
     }
 
-    pub fn consume(&mut self) -> Result<char, LexerError> {
+    pub fn consume(&mut self) -> LexerResult<char> {
         self.source_chars.next().ok_or(LexerError::UnexpectedEof).map(|c| {
             if c == '\n' {
                 self.current_pos.line += 1;
@@ -85,7 +86,7 @@ impl<'a> Lexer<'a> {
         })
     }
 
-    pub fn expect(&mut self, expected: char) -> Result<char, LexerError> {
+    pub fn expect(&mut self, expected: char) -> LexerResult<char> {
         let pos = self.pos;
         let c = self.peek()?;
 
@@ -121,7 +122,7 @@ impl<'a> Lexer<'a> {
     }
 
     // Expects the starting '/' of the comment to already be matched
-    pub fn skip_comment(&mut self) -> Result<(), LexerError> {
+    pub fn skip_comment(&mut self) -> LexerResult<()> {
         if let Ok(_) = self.expect('/') {
             self.skip_line();
             Ok(())
@@ -154,7 +155,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn skip(&mut self, number: i32) -> Result<(), LexerError> {
+    pub fn skip(&mut self, number: i32) -> LexerResult<()> {
         for _ in [0..number].iter() {
             self.consume()?;
         }
@@ -162,7 +163,7 @@ impl<'a> Lexer<'a> {
         Ok(())
     }
 
-    pub fn expect_str<'b>(&mut self, expected: &'b str) -> Result<&'b str, LexerError> {
+    pub fn expect_str<'b>(&mut self, expected: &'b str) -> LexerResult<&'b str> {
         for c in expected.chars() {
             self.expect(c)?;
         }

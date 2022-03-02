@@ -2,8 +2,10 @@ use crate::parser::lexer::{Lexer, LexerError, TokenPos};
 
 use crate::util;
 
-#[derive(Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum LangTokenType {
+    None,
+
     Name,
     LiteralString,
     LiteralNumber,
@@ -27,9 +29,11 @@ pub enum LangTokenType {
     Minus,
     Star,
     Slash,
+
+    Eof,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LangToken<'a> {
     token_type: LangTokenType,
     text: &'a str, // 'a is lifetime of source code string (tokens point into that)
@@ -43,6 +47,14 @@ impl<'a> LangToken<'a> {
         }
     }
 
+    pub fn empty() -> LangToken<'static> {
+        LangToken {
+            token_type: LangTokenType::None,
+            text: "",
+            pos: TokenPos::begin()
+        }
+    }
+
     pub fn token_type(&self) -> &LangTokenType { &self.token_type }
     pub fn text(&self) -> &str { &self.text }
     pub fn pos(&self) -> &TokenPos { &self.pos }
@@ -52,6 +64,8 @@ pub struct LangLexer<'a> {
     lexer: Lexer<'a>,
 }
 
+type LexerResult<T> = Result<T, LexerError>;
+
 impl<'a> LangLexer<'a> {
     pub fn new(source: &'a str) -> LangLexer<'a> {
         LangLexer {
@@ -59,14 +73,18 @@ impl<'a> LangLexer<'a> {
         }
     }
 
-    fn make_token(&self, token_type: LangTokenType) -> LangToken {
+    fn make_token(&self, token_type: LangTokenType) -> LangToken<'a> {
         LangToken::new(token_type, self.lexer.get_token_text(), self.lexer.pos())
     }
 
-    pub fn scan_token(&mut self) -> Result<LangToken, LexerError> {
+    pub fn scan_token(&mut self) -> LexerResult<LangToken<'a>> {
         self.lexer.skip_whitespace();
         self.lexer.set_start_pos_to_current();
-        let c = self.lexer.consume()?;
+        let c = match self.lexer.consume() {
+            result @ Ok(_) => result,
+            Err(LexerError::UnexpectedEof) => return Ok(LangToken::new(LangTokenType::Eof, "", self.lexer.pos())),
+             result @ Err(_) => result
+        }?;
 
         match c {
             '{' => Ok(self.make_token(LangTokenType::ObjectBegin)),
@@ -103,8 +121,15 @@ impl<'a> LangLexer<'a> {
                 }
 
                 if let Ok(_) = self.lexer.expect('.') {
-                    while util::is_digit(*self.lexer.peek()?) {
+                    let mut c = *self.lexer.peek()?;
+
+                    if !util::is_digit(c) {
+                        return Err(LexerError::UnexpectedCharacter(self.lexer.current_pos, c));
+                    }
+
+                    while util::is_digit(c) {
                         let _ = self.lexer.consume();
+                        c = *self.lexer.peek()?;
                     }
                 }
 
@@ -153,6 +178,17 @@ impl<'a> LangLexer<'a> {
             }
 
             _ => Err(LexerError::UnexpectedCharacter(self.lexer.pos(), c))
+        }
+    }
+}
+
+impl<'a> Iterator for LangLexer<'a> {
+    type Item = LexerResult<LangToken<'a>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.scan_token() {
+            Ok(token) if *token.token_type() == LangTokenType::Eof => None,
+            result => Some(result),
         }
     }
 }
