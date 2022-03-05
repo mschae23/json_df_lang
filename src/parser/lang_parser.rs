@@ -1,11 +1,10 @@
-use std::iter::Peekable;
 use crate::element::Element;
 use crate::parser::lexer::{LangLexer, LangToken, LangTokenType, LexerError, TokenPos};
 use crate::util;
 use crate::util::EscapeError;
 
 #[derive(Debug)]
-pub enum ParseError<'a> {
+pub enum ParseError {
     UnexpectedEof,
 
     UnexpectedCharacter(TokenPos, char),
@@ -15,17 +14,17 @@ pub enum ParseError<'a> {
         got: char
     },
 
-    UnexpectedToken(TokenPos, LangToken<'a>),
+    UnexpectedToken(TokenPos, LangToken),
     ExpectedToken {
         pos: TokenPos,
         expected: LangTokenType,
-        got: LangToken<'a>
+        got: LangToken
     },
 
     OtherError(TokenPos, String)
 }
 
-impl<'a> From<LexerError> for ParseError<'a> { // To use ? operator on lexer methods
+impl From<LexerError> for ParseError { // To use ? operator on lexer methods
     fn from(err: LexerError) -> Self {
         match err {
             LexerError::UnexpectedEof => ParseError::UnexpectedEof,
@@ -37,7 +36,7 @@ impl<'a> From<LexerError> for ParseError<'a> { // To use ? operator on lexer met
     }
 }
 
-impl<'a> ParseError<'a> {
+impl ParseError {
     pub fn from_escape_error(e: EscapeError, pos: TokenPos) -> Self {
         match e {
             EscapeError::UnexpectedEof => ParseError::UnexpectedEof,
@@ -50,47 +49,45 @@ impl<'a> ParseError<'a> {
 }
 
 pub struct LangParser<'a> {
-    lexer: Peekable<LangLexer<'a>>,
+    lexer: LangLexer<'a>,
 
-    // Can't store Tokens here
-    // previous: LangToken<'a>, current: LangToken<'a>,
+    previous: LangToken, current: LangToken, // This is the reason LangToken can't store a reference
 }
 
-type ParseResult<'e, T> = Result<T, ParseError<'e>>;
+type ParseResult<T> = Result<T, ParseError>;
 
 impl<'a> LangParser<'a> {
     pub fn new(lexer: LangLexer<'a>) -> Self {
-        let parser = LangParser {
-            lexer: lexer.peekable(),
+        let mut parser = LangParser {
+            lexer,
+
+            previous: LangToken::empty(), current: LangToken::empty()
         };
 
         // Sets current to first token (parse_element assumes this to be the case)
         // Ignores any error; will be handled by the next call to parse_element
-        // let _ = parser.consume();
+        let _ = parser.consume();
         parser
     }
 
-    fn consume(&mut self) -> ParseResult<'_, LangToken<'_>> {
-        // std::mem::swap(&mut self.previous, &mut self.current); // self.previous = self.current; cannot move
-        // self.current = self.lexer.scan_token()?; // Set current to next token;
-        Ok(self.lexer.next().ok_or(ParseError::UnexpectedEof)??)
+    fn consume(&mut self) -> ParseResult<()> {
+        std::mem::swap(&mut self.previous, &mut self.current); // self.previous = self.current; cannot move
+        self.current = self.lexer.scan_token()?; // Set current to next token;
+
+        Ok(())
     }
 
-    fn expect(&mut self, token_type: LangTokenType) -> ParseResult<'_, LangToken<'_>> {
-        let next = match self.lexer.peek().ok_or(ParseError::UnexpectedEof)? {
-            Ok(token) => token,
-            Err(_) => return self.consume(), // If an error occurred, it should be fine to consume the next token
-        };
-
-        if *next.token_type() == token_type {
-            self.consume()
+    fn expect(&mut self, token_type: LangTokenType) -> ParseResult<&LangToken> {
+        if *self.current.token_type() == token_type {
+            self.consume()?;
+            Ok(&self.current)
         } else {
-            // Err(ParseError::ExpectedToken { pos: *next.pos(), expected: token_type, got: *next })
-            todo!()
+            // Clone should be fine in the error case
+            Err(ParseError::ExpectedToken { pos: *self.current.pos(), expected: token_type, got: self.current.clone() })
         }
     }
 
-    fn parse_number(token: &LangToken<'_>) -> ParseResult<'a, Element> {
+    fn parse_number(token: &LangToken) -> ParseResult<Element> {
         token.text().parse::<i32>()
             .map(|value| Element::IntElement(value))
             .or_else(|_err| token.text().parse::<f64>()
@@ -99,23 +96,40 @@ impl<'a> LangParser<'a> {
                 format!("Float parse error: {}", err.to_string())))
     }
 
-    pub fn parse_element(&mut self) -> ParseResult<'_, Element> {
-        let token = self.consume()?;
+    fn parse_object(&mut self) -> ParseResult<Element> {
+        // Can use self.previous to see the object begin token ('{')
 
-        match token.token_type() {
-            LangTokenType::Name => Ok(Element::NameElement(String::from(token.text()))),
-            LangTokenType::LiteralString => Ok(Element::StringElement(util::unescape_str(token.text())
-                .map_err(|err| ParseError::from_escape_error(err, *token.pos()))?)),
-            LangTokenType::LiteralNumber => LangParser::parse_number(&token),
+        todo!()
+    }
+
+    fn parse_array(&mut self) -> ParseResult<Element> {
+        todo!()
+    }
+
+    fn parse_group(&mut self) -> ParseResult<Element> {
+        let element = self.parse_element()?;
+        self.expect(LangTokenType::GroupEnd)?;
+
+        Ok(element)
+    }
+
+    pub fn parse_element(&mut self) -> ParseResult<Element> {
+        self.consume()?;
+
+        match self.previous.token_type() {
+            LangTokenType::Name => Ok(Element::NameElement(String::from(self.previous.text()))),
+            LangTokenType::LiteralString => Ok(Element::StringElement(util::unescape_str(self.previous.text())
+                .map_err(|err| ParseError::from_escape_error(err, *self.previous.pos()))?)),
+            LangTokenType::LiteralNumber => LangParser::parse_number(&self.previous),
             LangTokenType::LiteralTrue => Ok(Element::BooleanElement(true)),
             LangTokenType::LiteralFalse => Ok(Element::BooleanElement(false)),
             LangTokenType::LiteralNull => Ok(Element::NullElement),
-            LangTokenType::ObjectBegin => todo!(),
-            LangTokenType::ArrayBegin => todo!(),
-            LangTokenType::GroupBegin => todo!(),
+            LangTokenType::ObjectBegin => self.parse_object(),
+            LangTokenType::ArrayBegin => self.parse_array(),
+            LangTokenType::GroupBegin => self.parse_group(),
 
             LangTokenType::Eof => Err(ParseError::UnexpectedEof),
-            _ => Err(ParseError::UnexpectedToken(*token.pos(), token.clone())),
+            _ => Err(ParseError::UnexpectedToken(*self.previous.pos(), self.previous.clone())),
         }
     }
 }

@@ -34,23 +34,23 @@ pub enum LangTokenType {
 }
 
 #[derive(Clone, Debug)]
-pub struct LangToken<'a> {
+pub struct LangToken {
     token_type: LangTokenType,
-    text: &'a str, // 'a is lifetime of source code string (tokens point into that)
+    text: String, // Can't be a reference to the source because self-referential structs aren't safe
     pos: TokenPos,
 }
 
-impl<'a> LangToken<'a> {
-    pub fn new(token_type: LangTokenType, text: &'a str, pos: TokenPos) -> LangToken<'a> {
+impl<'a> LangToken {
+    pub fn new(token_type: LangTokenType, text: String, pos: TokenPos) -> LangToken {
         LangToken {
             token_type, text, pos
         }
     }
 
-    pub fn empty() -> LangToken<'static> {
+    pub fn empty() -> LangToken {
         LangToken {
             token_type: LangTokenType::None,
-            text: "",
+            text: String::from(""),
             pos: TokenPos::begin()
         }
     }
@@ -73,16 +73,19 @@ impl<'a> LangLexer<'a> {
         }
     }
 
-    fn make_token(&self, token_type: LangTokenType) -> LangToken<'a> {
-        LangToken::new(token_type, self.lexer.get_token_text(), self.lexer.pos())
+    fn make_token(&self, token_type: LangTokenType) -> LangToken {
+        // Need to copy the String from the source because Token can't store a reference
+        // (Tokens need to be stored alongside the source string later, which would be
+        // self-referential)
+        LangToken::new(token_type, String::from(self.lexer.get_token_text()), self.lexer.pos())
     }
 
-    pub fn scan_token(&mut self) -> LexerResult<LangToken<'a>> {
+    pub fn scan_token(&mut self) -> LexerResult<LangToken> {
         self.lexer.skip_whitespace();
         self.lexer.set_start_pos_to_current();
         let c = match self.lexer.consume() {
             result @ Ok(_) => result,
-            Err(LexerError::UnexpectedEof) => return Ok(LangToken::new(LangTokenType::Eof, "", self.lexer.pos())),
+            Err(LexerError::UnexpectedEof) => return Ok(LangToken::new(LangTokenType::Eof, String::from(""), self.lexer.pos())),
              result @ Err(_) => result
         }?;
 
@@ -112,7 +115,7 @@ impl<'a> LangLexer<'a> {
                 self.lexer.consume()?; // the trailing '"'
                 let text = self.lexer.get_token_text();
 
-                Ok(LangToken::new(LangTokenType::LiteralString, &text[.. text.len() - 1], self.lexer.pos()))
+                Ok(LangToken::new(LangTokenType::LiteralString, String::from(&text[.. text.len() - 1]), self.lexer.pos()))
             },
 
             '0'..='9' | '-' => {
@@ -183,7 +186,7 @@ impl<'a> LangLexer<'a> {
 }
 
 impl<'a> Iterator for LangLexer<'a> {
-    type Item = LexerResult<LangToken<'a>>;
+    type Item = LexerResult<LangToken>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.scan_token() {
