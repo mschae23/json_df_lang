@@ -2,18 +2,18 @@ use worldgen_lang::parser::LangParser;
 use worldgen_lang::parser::lexer::LangLexer;
 
 fn main() {
-    let _source = r#"
-{ "enabled": true, "example_factor": 5.3, "fields": [ { "type": "minecraft:something", value: 99 }, 20 + 3 * 2 ] }
+    let source = r#"
+{ "enabled": true, "example_factor": 5.3, "fields": [ { "type": "minecraft:something", value: 99 }, 20 /* + 3 * 2 */ ] }
     "#;
 
-    let source = r#" 384.1 "Hello\tworld\u0021" "#;
+    let _source = r#" [ 384.1, "Hello\tworld\u0021" ] "#;
 
     let lexer = LangLexer::new(source); // Moved into parser
     let mut parser = LangParser::new(lexer);
 
     match parser.parse_element() {
         Ok(element) => println!("{:?}", element),
-        Err(err) => println!("Error while parsing: {:?}", err),
+        Err(err) => println!("Error while parsing: {}", err),
     }
 
     /*

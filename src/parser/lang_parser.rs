@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 use crate::element::Element;
 use crate::parser::lexer::{LangLexer, LangToken, LangTokenType, LexerError, TokenPos};
 use crate::util;
@@ -48,6 +50,22 @@ impl ParseError {
     }
 }
 
+impl Display for ParseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseError::UnexpectedEof => f.write_str("Unexpected EOF"),
+            ParseError::UnexpectedCharacter(pos, c) => write!(f, "{0} Unexpected character: '{1}'", pos, c),
+            ParseError::ExpectedCharacter { pos, expected, got } =>
+                write!(f, "{0} Expected character '{1}', got: '{2}'", pos, expected, got),
+            ParseError::UnexpectedToken(pos, token) =>
+                write!(f, "{0} Unexpected token: {1}", pos, token),
+            ParseError::ExpectedToken { pos, expected, got } =>
+                write!(f, "{0} Expected token type {1:?}, got: {2}", pos, expected, got),
+            ParseError::OtherError(pos, message) => write!(f, "{0} Other error: {1}", pos, message),
+        }
+    }
+}
+
 pub struct LangParser<'a> {
     lexer: LangLexer<'a>,
 
@@ -70,6 +88,14 @@ impl<'a> LangParser<'a> {
         parser
     }
 
+    fn peek(&self) -> &LangToken {
+        &self.current
+    }
+
+    fn is_eof(&self) -> bool {
+        self.current.token_type() == LangTokenType::Eof
+    }
+
     fn consume(&mut self) -> ParseResult<()> {
         std::mem::swap(&mut self.previous, &mut self.current); // self.previous = self.current; cannot move
         self.current = self.lexer.scan_token()?; // Set current to next token;
@@ -78,7 +104,7 @@ impl<'a> LangParser<'a> {
     }
 
     fn expect(&mut self, token_type: LangTokenType) -> ParseResult<&LangToken> {
-        if *self.current.token_type() == token_type {
+        if self.current.token_type() == token_type {
             self.consume()?;
             Ok(&self.current)
         } else {
@@ -99,11 +125,41 @@ impl<'a> LangParser<'a> {
     fn parse_object(&mut self) -> ParseResult<Element> {
         // Can use self.previous to see the object begin token ('{')
 
-        todo!()
+        let mut fields = Vec::new();
+
+        while self.peek().token_type() != LangTokenType::ObjectEnd && !self.is_eof() {
+            let key = self.parse_element()?;
+            self.expect(LangTokenType::Colon)?;
+            let value = self.parse_element()?;
+
+            fields.push((key, value));
+
+            let comma = self.expect(LangTokenType::Comma).map(|x| x.clone());
+
+            if self.peek().token_type() != LangTokenType::ObjectEnd {
+                comma?; // If the next token is not ')', this will report an error if the comma is missing
+            }
+        }
+
+        let _ = self.consume(); // ObjectEnd
+        Ok(Element::ObjectElement(fields))
     }
 
     fn parse_array(&mut self) -> ParseResult<Element> {
-        todo!()
+        let mut elements = Vec::new();
+
+        while self.peek().token_type() != LangTokenType::ArrayEnd && !self.is_eof() {
+            elements.push(self.parse_element()?);
+
+            let comma = self.expect(LangTokenType::Comma).map(|x| x.clone());
+
+            if self.peek().token_type() != LangTokenType::ArrayEnd {
+                comma?; // If the next token is not ')', this will report an error if the comma is missing
+            }
+        }
+
+        let _ = self.consume(); // ArrayEnd
+        Ok(Element::ArrayElement(elements))
     }
 
     fn parse_group(&mut self) -> ParseResult<Element> {

@@ -1,8 +1,11 @@
+use std::fmt::{Display, Formatter};
+
 use crate::parser::lexer::{Lexer, LexerError, TokenPos};
 
 use crate::util;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug)]
+#[repr(u8)]
 pub enum LangTokenType {
     None,
 
@@ -55,9 +58,20 @@ impl<'a> LangToken {
         }
     }
 
-    pub fn token_type(&self) -> &LangTokenType { &self.token_type }
+    pub fn token_type(&self) -> LangTokenType { self.token_type }
     pub fn text(&self) -> &str { &self.text }
     pub fn pos(&self) -> &TokenPos { &self.pos }
+}
+
+impl Display for LangToken {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.token_type {
+            LangTokenType::None => f.write_str("None"),
+            LangTokenType::Eof => f.write_str("Eof"),
+            LangTokenType::LiteralString => write!(f, "`\"{0}\"`", self.text),
+            _ => write!(f, "`{0}`", self.text),
+        }
+    }
 }
 
 pub struct LangLexer<'a> {
@@ -103,7 +117,13 @@ impl<'a> LangLexer<'a> {
             '+' => Ok(self.make_token(LangTokenType::Plus)),
             '-' if !util::is_digit(*self.lexer.peek()?) => Ok(self.make_token(LangTokenType::Minus)),
             '*' => Ok(self.make_token(LangTokenType::Star)),
-            '/' => Ok(self.make_token(LangTokenType::Slash)),
+            '/' => {
+                if let Ok(_) = self.lexer.skip_comment() {
+                    return self.scan_token(); // TODO better solution than recursive call
+                } else {
+                    Ok(self.make_token(LangTokenType::Slash))
+                }
+            },
 
             '"' => {
                 self.lexer.set_start_pos_to_current(); // Don't include leading '"'
@@ -190,7 +210,7 @@ impl<'a> Iterator for LangLexer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.scan_token() {
-            Ok(token) if *token.token_type() == LangTokenType::Eof => None,
+            Ok(token) if token.token_type() == LangTokenType::Eof => None,
             result => Some(result),
         }
     }

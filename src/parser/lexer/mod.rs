@@ -1,14 +1,23 @@
 mod lang_lexer;
-pub use lang_lexer::{ LangTokenType, LangToken, LangLexer };
+
+use std::fmt::{Display, Formatter};
+pub use lang_lexer::{LangTokenType, LangToken, LangLexer };
 
 use std::iter::Peekable;
 use std::str::Chars;
+
 use crate::util::EscapeError;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TokenPos {
     pub line: i32,
     pub column: i32,
+}
+
+impl Display for TokenPos {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[line {0} column {1}]", self.line, self.column)
+    }
 }
 
 #[derive(Debug, Clone)]
