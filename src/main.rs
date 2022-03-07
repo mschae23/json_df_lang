@@ -3,7 +3,7 @@ use worldgen_lang::parser::lexer::LangLexer;
 
 fn main() {
     let source = r#"
-{ "enabled": true, "example_factor": 5.3, "fields": [ { "type": "minecraft:something", value: 99 }, 20 /* + 3 * 2 */ ] }
+{ "enabled": true, "example_factor": 5.3, "fields": [ { "type": "minecraft:something", value: 99 }, 20 + 3 * min(9, 3 + 5) ] }
     "#;
 
     let _source = r#" [ 384.1, "Hello\tworld\u0021" ] "#;

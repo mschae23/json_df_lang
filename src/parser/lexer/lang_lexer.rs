@@ -147,12 +147,19 @@ impl<'a> LangLexer<'a> {
                     let mut c = *self.lexer.peek()?;
 
                     if !util::is_digit(c) {
-                        return Err(LexerError::UnexpectedCharacter(self.lexer.current_pos, c));
+                        // return Err(LexerError::UnexpectedCharacter(self.lexer.current_pos, c));
+
+                        self.lexer.hold('.'); // TODO Find a better solution for this
+                        self.lexer.current -= 1;
+
+                        return Ok(self.make_token(LangTokenType::LiteralNumber));
                     }
 
                     while util::is_digit(c) {
                         let _ = self.lexer.consume();
+
                         c = *self.lexer.peek()?;
+
                     }
                 }
 

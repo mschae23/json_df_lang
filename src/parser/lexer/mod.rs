@@ -1,10 +1,10 @@
 mod lang_lexer;
 
 use std::fmt::{Display, Formatter};
-pub use lang_lexer::{LangTokenType, LangToken, LangLexer };
-
 use std::iter::Peekable;
 use std::str::Chars;
+
+pub use lang_lexer::{LangTokenType, LangToken, LangLexer };
 
 use crate::util::EscapeError;
 
@@ -59,6 +59,7 @@ impl TokenPos {
 struct Lexer<'a> {
     source: &'a str,
     source_chars: Peekable<Chars<'a>>,
+    hold: Option<char>,
     start: usize, current: usize,
     pos: TokenPos, current_pos: TokenPos,
 }
@@ -69,7 +70,7 @@ type LexerResult<T> = Result<T, LexerError>;
 impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Lexer<'a> {
         Lexer {
-            source, source_chars: source.chars().peekable(),
+            source, source_chars: source.chars().peekable(), hold: None,
             start: 0, current: 0,
             pos: TokenPos::begin(), current_pos: TokenPos::begin()
         }
@@ -77,11 +78,24 @@ impl<'a> Lexer<'a> {
 
     pub fn pos(&self) -> TokenPos { self.pos }
 
+    pub fn hold(&mut self, character: char) {
+        self.hold = Some(character);
+    }
+
     pub fn peek(&mut self) -> LexerResult<&char> {
+        if let Some(c) = self.hold.as_ref() {
+            return Ok(c);
+        }
+
         self.source_chars.peek().ok_or(LexerError::UnexpectedEof)
     }
 
     pub fn consume(&mut self) -> LexerResult<char> {
+        if let Some(c) = self.hold.take() {
+            self.current += 1;
+            return Ok(c);
+        }
+
         self.source_chars.next().ok_or(LexerError::UnexpectedEof).map(|c| {
             if c == '\n' {
                 self.current_pos.line += 1;

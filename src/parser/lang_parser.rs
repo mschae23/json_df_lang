@@ -1,9 +1,12 @@
 use std::fmt::{Display, Formatter};
 
+pub mod precedence;
+
 use crate::element::Element;
 use crate::parser::lexer::{LangLexer, LangToken, LangTokenType, LexerError, TokenPos};
 use crate::util;
 use crate::util::EscapeError;
+use precedence::Precedence;
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -21,6 +24,11 @@ pub enum ParseError {
         pos: TokenPos,
         expected: LangTokenType,
         got: LangToken
+    },
+
+    UnexpectedElement {
+        expected: LangTokenType,
+        got: Element,
     },
 
     OtherError(TokenPos, String)
@@ -61,6 +69,8 @@ impl Display for ParseError {
                 write!(f, "{0} Unexpected token: {1}", pos, token),
             ParseError::ExpectedToken { pos, expected, got } =>
                 write!(f, "{0} Expected token type {1:?}, got: {2}", pos, expected, got),
+            ParseError::UnexpectedElement { expected, got } =>
+                write!(f, "Expected token type {0:?}, got: {1:?}", expected, got),
             ParseError::OtherError(pos, message) => write!(f, "{0} Other error: {1}", pos, message),
         }
     }
@@ -128,9 +138,9 @@ impl<'a> LangParser<'a> {
         let mut fields = Vec::new();
 
         while self.peek().token_type() != LangTokenType::ObjectEnd && !self.is_eof() {
-            let key = self.parse_element()?;
+            let key = self.parse_precedence(Precedence::Any)?;
             self.expect(LangTokenType::Colon)?;
-            let value = self.parse_element()?;
+            let value = self.parse_precedence(Precedence::Any)?;
 
             fields.push((key, value));
 
@@ -149,7 +159,7 @@ impl<'a> LangParser<'a> {
         let mut elements = Vec::new();
 
         while self.peek().token_type() != LangTokenType::ArrayEnd && !self.is_eof() {
-            elements.push(self.parse_element()?);
+            elements.push(self.parse_precedence(Precedence::Any)?);
 
             let comma = self.expect(LangTokenType::Comma).map(|x| x.clone());
 
@@ -163,7 +173,7 @@ impl<'a> LangParser<'a> {
     }
 
     fn parse_group(&mut self) -> ParseResult<Element> {
-        let element = self.parse_element()?;
+        let element = self.parse_precedence(Precedence::Any)?;
         self.expect(LangTokenType::GroupEnd)?;
 
         Ok(element)
@@ -186,6 +196,110 @@ impl<'a> LangParser<'a> {
 
             LangTokenType::Eof => Err(ParseError::UnexpectedEof),
             _ => Err(ParseError::UnexpectedToken(*self.previous.pos(), self.previous.clone())),
+        }
+    }
+
+    fn parse_binary(&mut self, left: Element, precedence: Precedence) -> ParseResult<Element> {
+        let op = self.previous.clone();
+
+        let right = self.parse_precedence(precedence)?;
+
+        Ok(Element::BinaryElement {
+            left: Box::new(left),
+            operator: op,
+            right: Box::new(right)
+        })
+    }
+
+    fn parse_member(&mut self, left: Element) -> ParseResult<Element> {
+        self.expect(LangTokenType::Name)?;
+        let name = self.previous.text().to_string();
+
+        if let Ok(_) = self.expect(LangTokenType::GroupBegin) { // Function call
+            let mut arguments = Vec::new();
+
+            while self.peek().token_type() != LangTokenType::GroupEnd && !self.is_eof() {
+                arguments.push(self.parse_precedence(Precedence::Any)?);
+
+                let comma = self.expect(LangTokenType::Comma).map(|x| x.clone());
+
+                if self.peek().token_type() != LangTokenType::GroupEnd { comma?; }
+            }
+            let _ = self.consume(); // GroupEnd
+
+            Ok(Element::FunctionCallElement {
+                receiver: Some(Box::new(left)),
+                name,
+                arguments: Some(arguments)
+            })
+        } else {
+            Ok(Element::FunctionCallElement {
+                receiver: Some(Box::new(left)),
+                name,
+                arguments: None,
+            })
+        }
+    }
+
+    fn parse_function(&mut self, left: Element) -> ParseResult<Element> {
+        if let Element::NameElement(name) = left {
+            let mut arguments = Vec::new();
+
+            while self.peek().token_type() != LangTokenType::GroupEnd && !self.is_eof() {
+                arguments.push(self.parse_precedence(Precedence::Any)?);
+
+                let comma = self.expect(LangTokenType::Comma).map(|x| x.clone());
+
+                if self.peek().token_type() != LangTokenType::GroupEnd { comma?; }
+            }
+            let _ = self.consume(); // GroupEnd
+
+            Ok(Element::FunctionCallElement {
+                receiver: None,
+                name,
+                arguments: Some(arguments)
+            })
+        } else {
+            return Err(ParseError::UnexpectedElement {
+                expected: LangTokenType::Name,
+                got: left
+            })
+        }
+    }
+
+    pub fn parse_precedence(&mut self, precedence: Precedence) -> ParseResult<Element> {
+        let mut left = self.parse_element()?;
+
+        while self.get_precedence().map(|x| precedence < x).unwrap_or(false) {
+            self.consume()?;
+
+            match self.previous.token_type() {
+                LangTokenType::Plus => left = self.parse_binary(left, Precedence::Sum)?,
+                LangTokenType::Minus => left = self.parse_binary(left, Precedence::Sum)?,
+                LangTokenType::Star => left = self.parse_binary(left, Precedence::Factor)?,
+                LangTokenType::Slash => left = self.parse_binary(left, Precedence::Factor)?,
+
+                LangTokenType::Dot => left = self.parse_member(left)?,
+                LangTokenType::GroupBegin => left = self.parse_function(left)?,
+
+                LangTokenType::Eof => return Ok(left),
+                _ => return Err(ParseError::UnexpectedToken(*self.previous.pos(), self.previous.clone())),
+            }
+        }
+
+        Ok(left)
+    }
+
+    fn get_precedence(&self) -> Option<Precedence> {
+        match self.peek().token_type() {
+            LangTokenType::Plus => Some(Precedence::Sum),
+            LangTokenType::Minus => Some(Precedence::Sum),
+            LangTokenType::Star => Some(Precedence::Factor),
+            LangTokenType::Slash => Some(Precedence::Factor),
+
+            LangTokenType::Dot => Some(Precedence::Call),
+            LangTokenType::GroupBegin => Some(Precedence::Call),
+            _ => None,
         }
     }
 }
