@@ -139,12 +139,15 @@ impl<'a> LangLexer<'a> {
             },
 
             '0'..='9' | '-' => {
-                while util::is_digit(*self.lexer.peek()?) {
+                while self.lexer.peek().map(|c| *c).map(util::is_digit).unwrap_or(false) {
                     let _ = self.lexer.consume();
                 }
 
                 if let Ok(_) = self.lexer.expect('.') {
-                    let mut c = *self.lexer.peek()?;
+                    let mut c = *match self.lexer.peek() {
+                        Ok(c) => c,
+                        Err(_) => return Ok(self.make_token(LangTokenType::LiteralNumber)),
+                    };
 
                     if !util::is_digit(c) {
                         // return Err(LexerError::UnexpectedCharacter(self.lexer.current_pos, c));
@@ -158,28 +161,39 @@ impl<'a> LangLexer<'a> {
                     while util::is_digit(c) {
                         let _ = self.lexer.consume();
 
-                        c = *self.lexer.peek()?;
-
+                        c = *match self.lexer.peek() {
+                            Ok(c) => c,
+                            Err(_) => return Ok(self.make_token(LangTokenType::LiteralNumber)),
+                        };
                     }
                 }
 
-                let next = *self.lexer.peek()?;
+                let next = *match self.lexer.peek() {
+                    Ok(c) => c,
+                    Err(_) => return Ok(self.make_token(LangTokenType::LiteralNumber)),
+                };
 
                 if next == 'e' || next == 'E' { // Exponent
                     let _ = self.lexer.consume();
-                    let next = *self.lexer.peek()?;
+                    let next = *match self.lexer.peek() {
+                        Ok(c) => c,
+                        Err(_) => return Ok(self.make_token(LangTokenType::LiteralNumber)),
+                    };
 
                     if next == '+' || next == '-' {
                         let _ = self.lexer.consume();
                     }
 
-                    let next = *self.lexer.peek()?;
+                    let next = *match self.lexer.peek() {
+                        Ok(c) => c,
+                        Err(_) => return Ok(self.make_token(LangTokenType::LiteralNumber)),
+                    };
 
                     if !util::is_digit(next) {
                         return Err(LexerError::UnexpectedCharacter(self.lexer.current_pos, next));
                     }
 
-                    while util::is_digit(*self.lexer.peek()?) {
+                    while self.lexer.peek().map(|c| *c).map(util::is_digit).unwrap_or(false) {
                         let _ = self.lexer.consume();
                     }
                 }
@@ -200,7 +214,7 @@ impl<'a> LangLexer<'a> {
                 Ok(self.make_token(LangTokenType::LiteralNull))
             },
             _ if util::is_alpha(c) => {
-                while util::is_alpha_numeric(*self.lexer.peek()?) {
+                while self.lexer.peek().map(|c| *c).map(util::is_alpha_numeric).unwrap_or(false) {
                     let _ = self.lexer.consume();
                 }
 
