@@ -4,7 +4,7 @@ use crate::parser::lexer::{Lexer, LexerError, TokenPos};
 
 use crate::util;
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LangTokenType {
     None,
@@ -36,7 +36,7 @@ pub enum LangTokenType {
     Eof,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LangToken {
     token_type: LangTokenType,
     text: String, // Can't be a reference to the source because self-referential structs aren't safe
@@ -201,24 +201,21 @@ impl<'a> LangLexer<'a> {
                 Ok(self.make_token(LangTokenType::LiteralNumber))
             },
 
-            't' => {
-                self.lexer.expect_str("rue")?;
-                Ok(self.make_token(LangTokenType::LiteralTrue))
-            },
-            'f' => {
-                self.lexer.expect_str("alse")?;
-                Ok(self.make_token(LangTokenType::LiteralFalse))
-            },
-            'n' => {
-                self.lexer.expect_str("ull")?;
-                Ok(self.make_token(LangTokenType::LiteralNull))
-            },
             _ if util::is_alpha(c) => {
                 while self.lexer.peek().map(|c| *c).map(util::is_alpha_numeric).unwrap_or(false) {
                     let _ = self.lexer.consume();
                 }
 
-                Ok(self.make_token(LangTokenType::Name))
+                let mut token = self.make_token(LangTokenType::Name);
+
+                match token.text() {
+                    "true" => token.token_type = LangTokenType::LiteralTrue,
+                    "false" => token.token_type = LangTokenType::LiteralFalse,
+                    "null" => token.token_type = LangTokenType::LiteralNull,
+                    _ => {},
+                }
+
+                Ok(token)
             }
 
             _ => Err(LexerError::UnexpectedCharacter(self.lexer.pos(), c))

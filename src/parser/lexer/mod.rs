@@ -8,7 +8,7 @@ pub use lang_lexer::{LangTokenType, LangToken, LangLexer };
 
 use crate::util::EscapeError;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TokenPos {
     pub line: i32,
     pub column: i32,

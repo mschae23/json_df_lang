@@ -2,7 +2,25 @@ use std::fmt::{Debug, Formatter};
 
 use crate::parser::lexer::LangToken;
 
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ElementKind {
+    Null,
+
+    Boolean,
+    Int,
+    Float,
+    String,
+    Name,
+
+    Array,
+    Object,
+
+    Binary,
+    FunctionCall,
+}
+
+#[derive(Clone, PartialEq)]
 pub enum Element {
     NullElement,
 
@@ -27,6 +45,53 @@ pub enum Element {
         name: String,
         arguments: Option<Vec<Element>>,
     },
+}
+
+#[macro_export]
+macro_rules! string_element {
+    ($string:literal) => {
+        Element::StringElement(String::from($string))
+    };
+    ($string:expr) => {
+        Element::StringElement($string)
+    }
+}
+
+#[macro_export]
+macro_rules! object_element {
+    [$($name:expr => $element:expr),*] => {
+        Element::ObjectElement(vec![$(($name, $element)),*])
+    }
+}
+
+#[macro_export]
+macro_rules! array_element {
+    [$($element:expr),*] => {
+        Element::ArrayElement(vec![$($element),*])
+    }
+}
+
+impl From<Element> for ElementKind {
+    fn from(element: Element) -> Self {
+        element.kind()
+    }
+}
+
+impl Element {
+    pub fn kind(&self) -> ElementKind {
+        match self {
+            Element::NullElement => ElementKind::Null,
+            Element::BooleanElement(_) => ElementKind::Boolean,
+            Element::IntElement(_) => ElementKind::Int,
+            Element::FloatElement(_) => ElementKind::Float,
+            Element::StringElement(_) => ElementKind::String,
+            Element::NameElement(_) => ElementKind::Name,
+            Element::ArrayElement(_) => ElementKind::Array,
+            Element::ObjectElement(_) => ElementKind::Object,
+            Element::BinaryElement { .. } => ElementKind::Binary,
+            Element::FunctionCallElement { .. } => ElementKind::FunctionCall,
+        }
+    }
 }
 
 impl Debug for Element {

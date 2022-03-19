@@ -14,11 +14,16 @@ impl Display for ProcessWarning {
 
 #[derive(Clone, Debug)]
 pub enum ProcessError {
+    UnknownOperator(String),
+    UnknownFunction(String)
 }
 
 impl Display for ProcessError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TODO(ProcessError)")
+        match self {
+            ProcessError::UnknownOperator(operator) => write!(f, "Unknown operator: {}", operator),
+            ProcessError::UnknownFunction(name) => write!(f, "Unknown function: {}", name),
+        }
     }
 }
 

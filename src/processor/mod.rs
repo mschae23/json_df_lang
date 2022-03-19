@@ -142,4 +142,31 @@ impl<'a> ElementProcessor<'a> {
 
         result
     }
+
+    /* pub fn add_simple_function_processor<F>(&mut self, name: &'a str, parameters: &'a [ElementKind], f: F)
+        where F: 'a + Fn(Vec<Element>) -> ProcessResult {
+        self.add_postprocessor(|element| {
+            match &element {
+                Element::FunctionCallElement { receiver: None, name: actual_name, arguments: Some(args) } => {
+                    if name == actual_name && args.len() == parameters.len() {
+                        let mut can_continue = true;
+
+                        for (i, parameter) in parameters.iter().enumerate() {
+                            if args[i].kind() != *parameter {
+                                can_continue = false;
+                                break;
+                            }
+                        }
+
+                        if can_continue {
+                            return f(todo!());
+                        }
+                    }
+                },
+                _ => {},
+            };
+
+            ProcessResult::from_element(element)
+        });
+    } */
 }
