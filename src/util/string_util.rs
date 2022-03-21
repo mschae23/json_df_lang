@@ -102,3 +102,13 @@ pub fn escape_character(c: char) -> String {
         }
     }
 }
+
+pub fn escape_str(input: &str) -> String {
+    let mut output = String::new();
+
+    for c in input.chars() {
+        output.push_str(&escape_character(c));
+    }
+
+    output
+}
