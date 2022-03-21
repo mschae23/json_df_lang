@@ -179,7 +179,7 @@ impl<'a> LangParser<'a> {
         Ok(element)
     }
 
-    pub fn parse_element(&mut self) -> ParseResult<Element> {
+    fn parse_element(&mut self) -> ParseResult<Element> {
         self.consume()?;
 
         match self.previous.token_type() {
@@ -288,6 +288,11 @@ impl<'a> LangParser<'a> {
         }
 
         Ok(left)
+    }
+
+    pub fn parse_full(&mut self) -> ParseResult<Element> {
+        self.parse_precedence(Precedence::Any)
+        // TODO Disallow any tokens after top level element
     }
 
     fn get_precedence(&self) -> Option<Precedence> {

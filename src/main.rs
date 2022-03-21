@@ -33,7 +33,7 @@ fn main() {
         let lexer = LangLexer::new(&input_str); // Moved into parser
         let mut parser = LangParser::new(lexer);
 
-        let element = match parser.parse_element() {
+        let element = match parser.parse_full() {
             Ok(element) => element,
             Err(err) => {
                 println!("Error while parsing: {}", err);
