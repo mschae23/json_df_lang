@@ -221,12 +221,11 @@ impl<'a> ElementProcessor<'a> {
 
     pub fn process(&self, element: Element) -> ProcessResult {
         // let mut pre_result = ElementProcessor::apply_processors(element, &self.preprocessors);
-        let mut pre_result = self.pre_process(element);
+        let mut result = self.pre_process(element);
 
-        if let Some(element) = pre_result.take_element() {
+        if let Some(element) = result.take_element() {
             let result = match element {
                 Element::ArrayElement(values) => {
-                    let mut result = ProcessResult::empty();
                     let mut result_values = Vec::new();
 
                     for mut sub_result in values.into_iter().map(|element| self.process(element)) {
@@ -242,7 +241,6 @@ impl<'a> ElementProcessor<'a> {
                     result.with_element(Some(Element::ArrayElement(result_values)))
                 }
                 Element::ObjectElement(fields) => {
-                    let mut result = ProcessResult::empty();
                     let mut result_fields = Vec::new();
 
                     for (key, value) in fields {
@@ -262,8 +260,6 @@ impl<'a> ElementProcessor<'a> {
                     result.with_element(Some(Element::ObjectElement(result_fields)))
                 }
                 Element::BinaryElement { left, operator, right } => {
-                    let mut result = ProcessResult::empty();
-
                     let mut left_result = self.process(*left);
                     let mut right_result = self.process(*right);
 
@@ -281,8 +277,6 @@ impl<'a> ElementProcessor<'a> {
                     }))
                 }
                 Element::FunctionCallElement { receiver, name, arguments } => {
-                    let mut result = ProcessResult::empty();
-
                     let mut receiver_result = if let Some(receiver) = receiver {
                         let mut receiver_result = self.process(*receiver);
                         result.append_warnings_and_errors(&mut receiver_result);
@@ -321,7 +315,7 @@ impl<'a> ElementProcessor<'a> {
 
             result.flat_map(|element| ElementProcessor::apply_processors(element, &self.postprocessors))
         } else {
-            pre_result
+            result
         }
     }
 

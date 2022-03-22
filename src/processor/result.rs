@@ -2,17 +2,20 @@ use std::fmt::{Display, Formatter};
 
 use crate::element::Element;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ProcessWarning {
+    LerpDuplicatedCode(Element),
 }
 
 impl Display for ProcessWarning {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TODO(ProcessWarning)")
+        match self {
+            ProcessWarning::LerpDuplicatedCode(element) => write!(f, "Using lerp(delta, a, b) leads to the delta density function being duplicated: {:?}", element),
+        }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ProcessError {
     UnknownOperator(String),
     UnknownFunction(String)
@@ -58,7 +61,9 @@ impl ProcessResult {
     pub fn take_element(&mut self) -> Option<Element> { self.element.take() }
 
     pub fn warnings(&self) -> &Vec<ProcessWarning> { &self.warnings }
+    pub fn warnings_mut(&mut self) -> &mut Vec<ProcessWarning> { &mut self.warnings }
     pub fn errors(&self) -> &Vec<ProcessError> { &self.errors }
+    pub fn errors_mut(&mut self) -> &mut Vec<ProcessError> { &mut self.errors }
 
     pub fn with_warning(&mut self, warning: ProcessWarning) -> &mut Self {
         self.warnings.push(warning);

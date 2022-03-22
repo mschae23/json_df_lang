@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
 use worldgen_lang::element::Element;
-use worldgen_lang::{format, io, string_element, object_element};
+use worldgen_lang::{format, io, string_element, object_element, util};
 use worldgen_lang::parser::LangParser;
 use worldgen_lang::parser::lexer::LangLexer;
-use worldgen_lang::processor::{BinaryOperator, CustomThreeArgsFunction, ElementProcessor, NoArgFunction, OneArgFunction, ProcessResult, TwoArgsFunction};
+use worldgen_lang::processor::{BinaryOperator, CustomThreeArgsFunction, ElementProcessor, NoArgFunction, OneArgFunction, ProcessResult, ProcessWarning, TwoArgsFunction};
 
 fn main() {
     /* let source = r#"
@@ -52,7 +52,7 @@ fn main() {
     processor.add_two_args_function(TwoArgsFunction::new_without_method_syntax(String::from("max")));
 
     processor.add_custom_three_args_function(CustomThreeArgsFunction::new(String::from("lerp"),
-        Box::new(|a, b, c| ProcessResult::from_element(object_element!(
+        Box::new(|a, b, c| ProcessResult::new(object_element!(
             string_element!("type") => string_element!("minecraft:add"),
             string_element!("argument1") => object_element!(
                 string_element!("type") => string_element!("minecraft:mul"),
@@ -75,10 +75,11 @@ fn main() {
                 string_element!("argument1") => c,
                 string_element!("argument2") => object_element!(
                     string_element!("type") => string_element!("minecraft:cache_once"),
-                    string_element!("argument") => a
+                    string_element!("argument") => a.clone()
                 )
             )
-    )))));
+    ), vec![ ProcessWarning::LerpDuplicatedCode(Element::FunctionCallElement {
+            receiver: Some(Box::new(a)), name: String::from("cache_once"), arguments: Some(Vec::new()) }) ], Vec::new()))));
 
     processor.add_binary_operator(BinaryOperator::new(String::from("+"), String::from("add")));
     processor.add_binary_operator(BinaryOperator::new(String::from("*"), String::from("mul")));
@@ -95,12 +96,12 @@ fn main() {
             },
         };
 
-        let result = processor.process(element);
+        let mut result = processor.process(element);
 
         if !result.errors.is_empty() {
             println!("Errors:");
 
-            for error in result.errors() {
+            for error in util::distinct(result.errors_mut()) {
                 println!("- {}", error);
             }
 
@@ -108,13 +109,11 @@ fn main() {
         } else if !result.warnings.is_empty() {
             println!("Warnings:");
 
-            for error in result.errors() {
+            for error in util::distinct(result.warnings_mut()) {
                 println!("- {}", error);
             }
-
-            return None;
         } else if result.element.is_none() {
-            println!("Error during processing.");
+            println!("- Error during processing.");
             return None;
         }
 
