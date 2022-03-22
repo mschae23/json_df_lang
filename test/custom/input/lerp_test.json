@@ -1,0 +1,1 @@
+lerp(blend_alpha(), blend_offset(), 30.5)

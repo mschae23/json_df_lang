@@ -110,6 +110,28 @@ impl TwoArgsFunction {
     pub fn allow_method_syntax(&self) -> bool { self.allow_method_syntax }
 }
 
+pub struct CustomThreeArgsFunction {
+    pub name: String,
+    pub allow_method_syntax: bool,
+    function: Box<dyn Fn(Element, Element, Element) -> ProcessResult>,
+}
+
+impl CustomThreeArgsFunction {
+    pub fn new_with_allow_method_syntax(name: String, allow_method_syntax: bool, function: Box<dyn Fn(Element, Element, Element) -> ProcessResult>) -> CustomThreeArgsFunction {
+        CustomThreeArgsFunction {
+            name, allow_method_syntax, function
+        }
+    }
+
+    pub fn new(name: String, function: Box<dyn Fn(Element, Element, Element) -> ProcessResult>) -> CustomThreeArgsFunction {
+        CustomThreeArgsFunction::new_with_allow_method_syntax(name, false, function)
+    }
+
+    pub fn name(&self) -> &str { &self.name }
+    pub fn allow_method_syntax(&self) -> bool { self.allow_method_syntax }
+    pub fn function(&self) -> &Box<dyn Fn(Element, Element, Element) -> ProcessResult> { &self.function }
+}
+
 pub struct BinaryOperator {
     pub name: String,
     namespace: Cow<'static, str>,
@@ -153,6 +175,7 @@ pub struct ElementProcessor<'a> {
     no_arg_functions: Vec<NoArgFunction>,
     one_arg_functions: Vec<OneArgFunction>,
     two_args_functions: Vec<TwoArgsFunction>,
+    custom_three_args_functions: Vec<CustomThreeArgsFunction>,
     binary_operators: Vec<BinaryOperator>, // Will ignore allow_method_syntax
 }
 
@@ -163,6 +186,7 @@ impl<'a> ElementProcessor<'a> {
             postprocessors: Vec::new(),
 
             no_arg_functions: Vec::new(), one_arg_functions: Vec::new(), two_args_functions: Vec::new(),
+            custom_three_args_functions: Vec::new(),
             binary_operators: Vec::new(),
         }
     }
@@ -185,6 +209,10 @@ impl<'a> ElementProcessor<'a> {
 
     pub fn add_two_args_function(&mut self, function: TwoArgsFunction) {
         self.two_args_functions.push(function);
+    }
+
+    pub fn add_custom_three_args_function(&mut self, function: CustomThreeArgsFunction) {
+        self.custom_three_args_functions.push(function);
     }
 
     pub fn add_binary_operator(&mut self, function: BinaryOperator) {
@@ -304,7 +332,7 @@ impl<'a> ElementProcessor<'a> {
                     if function.allow_as_symbol() && function.name() == name {
                         return ProcessResult::from_element(object_element!(
                                 string_element!("type") => Element::StringElement(format!("{}:{}", function.namespace(), function.name()))
-                            ));
+                        ));
                     }
                 }
 
@@ -343,6 +371,12 @@ impl<'a> ElementProcessor<'a> {
                             ));
                         }
                     }
+                } else if args.len() == 2 {
+                    for function in &self.custom_three_args_functions {
+                        if function.allow_method_syntax() && function.name() == name {
+                            return function.function()(*receiver, args.swap_remove(0), args.swap_remove(0));
+                        }
+                    }
                 }
 
                 ProcessResult::from_element(Element::FunctionCallElement { receiver: Some(receiver), name, arguments: Some(args) })
@@ -375,6 +409,12 @@ impl<'a> ElementProcessor<'a> {
                             ));
                         }
                     }
+                } else if args.len() == 3 {
+                    for function in &self.custom_three_args_functions {
+                        if function.name() == name {
+                            return function.function()(args.swap_remove(0), args.swap_remove(0), args.swap_remove(0));
+                        }
+                    }
                 }
 
                 ProcessResult::from_element(Element::FunctionCallElement { receiver: None, name, arguments: Some(args) })
@@ -396,31 +436,4 @@ impl<'a> ElementProcessor<'a> {
 
         result
     }
-
-    /* pub fn add_simple_function_processor<F>(&mut self, name: &'a str, parameters: &'a [ElementKind], f: F)
-        where F: 'a + Fn(Vec<Element>) -> ProcessResult {
-        self.add_postprocessor(|element| {
-            match &element {
-                Element::FunctionCallElement { receiver: None, name: actual_name, arguments: Some(args) } => {
-                    if name == actual_name && args.len() == parameters.len() {
-                        let mut can_continue = true;
-
-                        for (i, parameter) in parameters.iter().enumerate() {
-                            if args[i].kind() != *parameter {
-                                can_continue = false;
-                                break;
-                            }
-                        }
-
-                        if can_continue {
-                            return f(todo!());
-                        }
-                    }
-                },
-                _ => {},
-            };
-
-            ProcessResult::from_element(element)
-        });
-    } */
 }

@@ -9,7 +9,6 @@ pub enum Error {
     Io(std::io::Error),
     UnknownFile(PathBuf),
     PathRelativizeFailure,
-    SubError, // Errors in sub-directories or errors by the passed function are printed directly
 }
 
 impl From<std::io::Error> for Error {
@@ -23,8 +22,7 @@ impl Display for Error {
         match self {
             Error::Io(err) => write!(f, "IO error: {}", err),
             Error::UnknownFile(path) => write!(f, "Unknown file (path is neither a file nor a directory): {}", path.to_string_lossy()),
-            Error::PathRelativizeFailure => Ok(()), // Already printed in relativize function
-            Error::SubError => Ok(()), // These errors are printed directly
+            Error::PathRelativizeFailure => write!(f, "Path relativize failure!"),
         }
     }
 }
@@ -33,32 +31,44 @@ pub fn process(input: PathBuf, output: PathBuf, f: &mut impl FnMut(String) -> Op
     let original_input = input.clone();
 
     match process_path(original_input.as_path(), input, output, f) {
-        Ok(_) => {},
+        Ok(success) => if success {
+            println!();
+            println!("Done.");
+        } else {
+            println!();
+            println!("Done with errors.");
+        },
         Err(err) => println!("{}", err),
     }
 }
 
-pub fn process_path(original_input: &Path, input: PathBuf, output: PathBuf, f: &mut impl FnMut(String) -> Option<String>) -> Result<(), Error> {
+pub fn process_path(original_input: &Path, input: PathBuf, output: PathBuf, f: &mut impl FnMut(String) -> Option<String>) -> Result<bool, Error> {
     let metadata = input.metadata()?;
 
     if metadata.is_dir() {
         std::fs::create_dir_all(&output)?;
         let mut error = false;
+        let mut blank_line = false;
 
         for file_entry in std::fs::read_dir(&input)? {
             match file_entry {
                 Ok(file_entry) => {
                     let path = file_entry.path();
-                    let relative_path_for_display = relativize(original_input, &path)?;
                     let relative_path = relativize(&input, &path)?;
 
-                    println!("Processing {}", relative_path_for_display.to_string_lossy());
+                    if blank_line {
+                        println!();
+                        blank_line = false;
+                    }
 
                     match process_path(original_input, path, output.join(relative_path), f) {
-                        Ok(_) => {},
-                        Err(err) => {
-                            println!("{}", err);
+                        Ok(success) => if !success {
                             error = true;
+                            blank_line = true;
+                        },
+                        Err(err) => {
+                            println!("Errors:\n- {}", err);
+                            blank_line = true;
                         }
                     };
                 },
@@ -69,11 +79,14 @@ pub fn process_path(original_input: &Path, input: PathBuf, output: PathBuf, f: &
         }
 
         if error {
-            Err(Error::SubError)
+            Ok(false)
         } else {
-            Ok(())
+            Ok(true)
         }
     } else if metadata.is_file() {
+        let relative_path_for_display = relativize(original_input, &input)?;
+        println!("Processing {}", relative_path_for_display.to_string_lossy());
+
         let mut input_file = File::open(input)?;
 
         let mut input_str = String::new();
@@ -81,21 +94,18 @@ pub fn process_path(original_input: &Path, input: PathBuf, output: PathBuf, f: &
 
         let output_str = match f(input_str) {
             Some(result) => result,
-            None => return Err(Error::SubError),
+            None => return Ok(false),
         };
 
         drop(input_file);
         let mut output_file = File::create(output)?;
         output_file.write_all(output_str.as_bytes())?;
-        Ok(())
+        Ok(true)
     } else {
         Err(Error::UnknownFile(input))
     }
 }
 
 fn relativize(base: &Path, path: &Path) -> Result<PathBuf, Error> {
-    pathdiff::diff_paths(path, base).ok_or_else(|| {
-        eprintln!("Path relativize failure!");
-        Error::PathRelativizeFailure
-    })
+    pathdiff::diff_paths(path, base).ok_or_else(|| Error::PathRelativizeFailure)
 }

@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
-use worldgen_lang::{format, io};
+use worldgen_lang::element::Element;
+use worldgen_lang::{format, io, string_element, object_element};
 use worldgen_lang::parser::LangParser;
 use worldgen_lang::parser::lexer::LangLexer;
-use worldgen_lang::processor::{BinaryOperator, ElementProcessor, NoArgFunction, OneArgFunction, TwoArgsFunction};
+use worldgen_lang::processor::{BinaryOperator, CustomThreeArgsFunction, ElementProcessor, NoArgFunction, OneArgFunction, ProcessResult, TwoArgsFunction};
 
 fn main() {
     /* let source = r#"
@@ -50,6 +51,35 @@ fn main() {
     processor.add_two_args_function(TwoArgsFunction::new_without_method_syntax(String::from("min")));
     processor.add_two_args_function(TwoArgsFunction::new_without_method_syntax(String::from("max")));
 
+    processor.add_custom_three_args_function(CustomThreeArgsFunction::new(String::from("lerp"),
+        Box::new(|a, b, c| ProcessResult::from_element(object_element!(
+            string_element!("type") => string_element!("minecraft:add"),
+            string_element!("argument1") => object_element!(
+                string_element!("type") => string_element!("minecraft:mul"),
+                string_element!("argument1") => b,
+                string_element!("argument2") => object_element!(
+                    string_element!("type") => string_element!("minecraft:add"),
+                    string_element!("argument1") => Element::FloatElement(1.0),
+                    string_element!("argument2") => object_element!(
+                        string_element!("type") => string_element!("minecraft:mul"),
+                        string_element!("argument1") => object_element!(
+                            string_element!("type") => string_element!("minecraft:cache_once"),
+                            string_element!("argument") => a.clone()
+                        ),
+                        string_element!("argument2") => Element::FloatElement(-1.0)
+                    )
+                )
+            ),
+            string_element!("argument2") => object_element!(
+                string_element!("type") => string_element!("minecraft:mul"),
+                string_element!("argument1") => c,
+                string_element!("argument2") => object_element!(
+                    string_element!("type") => string_element!("minecraft:cache_once"),
+                    string_element!("argument") => a
+                )
+            )
+    )))));
+
     processor.add_binary_operator(BinaryOperator::new(String::from("+"), String::from("add")));
     processor.add_binary_operator(BinaryOperator::new(String::from("*"), String::from("mul")));
 
@@ -60,7 +90,7 @@ fn main() {
         let element = match parser.parse_full() {
             Ok(element) => element,
             Err(err) => {
-                println!("Error while parsing: {}", err);
+                println!("Errors:\n- {}", err);
                 return None;
             },
         };
@@ -68,15 +98,22 @@ fn main() {
         let result = processor.process(element);
 
         if !result.errors.is_empty() {
-            println!();
-            println!("Errors: {:?}", result.errors);
+            println!("Errors:");
+
+            for error in result.errors() {
+                println!("- {}", error);
+            }
+
             return None;
         } else if !result.warnings.is_empty() {
-            println!();
-            println!("Warnings: {:?}", result.warnings);
+            println!("Warnings:");
+
+            for error in result.errors() {
+                println!("- {}", error);
+            }
+
             return None;
         } else if result.element.is_none() {
-            println!();
             println!("Error during processing.");
             return None;
         }
@@ -84,14 +121,11 @@ fn main() {
         let formatted_result = match format::format_json(result.element.unwrap(), format::Options::Pretty { indentation: 2 }) {
             Ok(result) => result,
             Err(err) => {
-                println!();
-                println!("{}", err);
+                println!("Errors:\n- {}", err);
                 return None;
             }
         };
 
         Some(formatted_result)
     });
-
-    println!("Done.");
 }
