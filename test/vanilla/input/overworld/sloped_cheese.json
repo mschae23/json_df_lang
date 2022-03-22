@@ -1,0 +1,6 @@
+4.0 * quarter_negative(("minecraft:overworld/depth" + "minecraft:overworld/jaggedness" * half_negative({
+  "noise": "minecraft:jagged",
+  "xz_scale": 1500.0,
+  "y_scale": 0.0,
+  "type": "minecraft:noise"
+})) * "minecraft:overworld/factor") + "minecraft:overworld/base_3d_noise"

@@ -3,8 +3,7 @@ use std::path::PathBuf;
 use worldgen_lang::{format, io};
 use worldgen_lang::parser::LangParser;
 use worldgen_lang::parser::lexer::LangLexer;
-use worldgen_lang::process;
-use worldgen_lang::processor::ElementProcessor;
+use worldgen_lang::processor::{BinaryOperator, ElementProcessor, NoArgFunction, OneArgFunction, TwoArgsFunction};
 
 fn main() {
     /* let source = r#"
@@ -26,8 +25,33 @@ fn main() {
     let output = PathBuf::from(&args[1]);
 
     let mut processor = ElementProcessor::new();
-    processor.add_postprocessor(process::process_operators);
-    processor.add_postprocessor(process::process_functions);
+    // processor.add_postprocessor(process::process_operators);
+    // processor.add_postprocessor(process::process_functions);
+
+    processor.add_no_arg_function(NoArgFunction::new(String::from("blend_alpha")));
+    processor.add_no_arg_function(NoArgFunction::new(String::from("blend_offset")));
+    processor.add_no_arg_function(NoArgFunction::new(String::from("beardifier")));
+    processor.add_no_arg_function(NoArgFunction::new(String::from("old_blended_noise")));
+    processor.add_no_arg_function(NoArgFunction::new(String::from("end_islands")));
+
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("abs")));
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("half_negative")));
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("quarter_negative")));
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("square")));
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("cube")));
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("squeeze")));
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("interpolated")));
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("flat_cache")));
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("cache_2d")));
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("cache_once")));
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("cache_all_in_cell")));
+    processor.add_one_arg_function(OneArgFunction::new_with_method_syntax(String::from("slide")));
+
+    processor.add_two_args_function(TwoArgsFunction::new_without_method_syntax(String::from("min")));
+    processor.add_two_args_function(TwoArgsFunction::new_without_method_syntax(String::from("max")));
+
+    processor.add_binary_operator(BinaryOperator::new(String::from("+"), String::from("add")));
+    processor.add_binary_operator(BinaryOperator::new(String::from("*"), String::from("mul")));
 
     io::process(input, output, &mut |input_str| {
         let lexer = LangLexer::new(&input_str); // Moved into parser

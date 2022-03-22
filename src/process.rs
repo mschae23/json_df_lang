@@ -28,7 +28,9 @@ pub fn process_operators(element: Element) -> ProcessResult {
 pub fn process_functions(element: Element) -> ProcessResult {
     match element {
         Element::FunctionCallElement { receiver: None, name, arguments: Some(mut args) } => {
-            if args.len() == 2 {
+            if args.len() == 3 {
+                todo!()
+            } else if args.len() == 2 {
                 if name == "min" || name == "max" {
                     ProcessResult::from_element(object_element!(string_element!("type") => string_element!(String::from("minecraft:") + &name),
                         string_element!("argument1") => args.swap_remove(0), string_element!("argument2") => args.swap_remove(0)
